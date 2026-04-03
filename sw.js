@@ -1,80 +1,110 @@
-const VERSION = "v6"; // 🔥 increment manually each update
+const VERSION = "v8"; // 🔥 increment every update
 const CACHE = "orbits-pwa-" + VERSION;
 
-self.addEventListener("install", e => {
-  console.log("SW INSTALL", VERSION);
+console.log("SW FILE LOADED:", VERSION);
+
+// ─────────────────────────────
+// INSTALL
+// ─────────────────────────────
+self.addEventListener("install", event => {
+  console.log("SW INSTALL:", VERSION);
   self.skipWaiting();
 });
 
-self.addEventListener("activate", e => {
-  console.log("SW ACTIVATE", VERSION);
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.map(k => caches.delete(k)))
-    )
+// ─────────────────────────────
+// ACTIVATE
+// ─────────────────────────────
+self.addEventListener("activate", event => {
+  console.log("SW ACTIVATE:", VERSION);
+
+  event.waitUntil(
+    caches.keys().then(keys => {
+      console.log("Clearing old caches:", keys);
+      return Promise.all(keys.map(k => caches.delete(k)));
+    })
   );
+
   self.clients.claim();
 });
 
+// ─────────────────────────────
+// FETCH (CRITICAL FIX HERE)
+// ─────────────────────────────
 self.addEventListener("fetch", event => {
 
-  // ✅ CRITICAL FIX: works on GitHub Pages
+  // Only intercept page loads
   if (event.request.mode === "navigate") {
 
+    console.log("SW intercept:", event.request.url);
+
     event.respondWith(
-      fetch(event.request)
-        .then(res => res.text())
+      fetch(event.request, { cache: "no-store" }) // 🔥 BYPASS GITHUB CACHE
+        .then(response => {
+          console.log("Fetched fresh HTML");
+          return response.text();
+        })
         .then(html => {
 
-          // ─────────────────────────────
-          // ✅ SPEED FIX
-          // ─────────────────────────────
-          html = html.replace('value="3"', 'value="1"');
-          html = html.replace('updateSpeedLabel(3)', 'updateSpeedLabel(1)');
+          console.log("Injecting debug overlay...");
 
-          // ─────────────────────────────
-          // ✅ UI HIDDEN DEFAULT
-          // ─────────────────────────────
-          html = html.replace('var uiVisible = true;', 'var uiVisible = false;');
-          html = html.replace('<div id="top">', '<div id="top" class="ui-hidden">');
-          html = html.replace('<div id="hud">', '<div id="hud" class="ui-hidden">');
+          try {
 
-          // ─────────────────────────────
-          // ✅ CAMERA (ECLIPTIC VIEW)
-          // ─────────────────────────────
-          html = html.replace(
-            'var cam = { theta:-0.42, phi:0.48, dist:22, panX:0, panY:0 };',
-            'var cam = { theta:0, phi:0.02, dist:18, panX:0, panY:0 };'
-          );
+            // ─────────────────────────────
+            // DEBUG OVERLAY (CANNOT MISS)
+            // ─────────────────────────────
+            html = html.replace(
+              "</body>",
+              `
+              <div style="
+                position:fixed;
+                top:20px;
+                left:20px;
+                background:#ff0000;
+                color:#ffffff;
+                font-size:18px;
+                font-family:monospace;
+                padding:10px 14px;
+                z-index:999999;
+                border-radius:4px;
+              ">
+                SW ACTIVE ${VERSION}
+              </div>
 
-          // ─────────────────────────────
-          // ✅ VERSION DISPLAY (GUARANTEED)
-          // ─────────────────────────────
-          html = html.replace(
-            '</body>',
-            `
-            <div style="
-              position:fixed;
-              bottom:10px;
-              left:50%;
-              transform:translateX(-50%);
-              color:#e8b84b;
-              font-size:12px;
-              font-family:monospace;
-              z-index:999999;
-              opacity:0.9;
-              pointer-events:none;
-            ">${VERSION}</div>
-            </body>`
-          );
+              <div style="
+                position:fixed;
+                bottom:10px;
+                left:50%;
+                transform:translateX(-50%);
+                color:#e8b84b;
+                font-size:12px;
+                font-family:monospace;
+                z-index:999999;
+                opacity:0.9;
+                pointer-events:none;
+              ">
+                ${VERSION}
+              </div>
+
+              </body>`
+            );
+
+            console.log("✔ Injection success");
+
+          } catch (err) {
+            console.error("❌ Injection error:", err);
+          }
 
           return new Response(html, {
             headers: { "Content-Type": "text/html" }
           });
 
         })
+        .catch(err => {
+          console.error("❌ Fetch failed:", err);
+
+          // fallback
+          return fetch(event.request);
+        })
     );
-
   }
-
 });
