@@ -1,9 +1,14 @@
 const BUILD = Date.now();
-const CACHE = 'orbits-pwa-' + BUILD;
+const CACHE = 'orbits-pwa-v3-' + BUILD;
 
 self.addEventListener('install', e => self.skipWaiting());
+
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))));
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.map(k => caches.delete(k)))
+    )
+  );
   self.clients.claim();
 });
 
@@ -17,14 +22,19 @@ self.addEventListener('fetch', event => {
         .then(html => {
 
           // ─────────────────────────────
-          // ✅ SPEED DEFAULT
+          // ✅ DEFAULT SPEED
           // ─────────────────────────────
           html = html.replace('value="3"', 'value="1"');
           html = html.replace('updateSpeedLabel(3)', 'updateSpeedLabel(1)');
 
           // ─────────────────────────────
-          // ✅ LIGHT + SHADOW SYSTEM
+          // ✅ LIGHT + SHADOW
           // ─────────────────────────────
+          html = html.replace(
+            "renderer.shadowMap.enabled = false;",
+            "renderer.shadowMap.enabled = true;"
+          );
+
           html = html.replace(
             "scene.add(new THREE.PointLight(0xfff0d0, 3.0, 120));",
             `
@@ -37,14 +47,6 @@ self.addEventListener('fetch', event => {
           );
 
           html = html.replace(
-            "renderer.shadowMap.enabled = false;",
-            "renderer.shadowMap.enabled = true;"
-          );
-
-          html = html.replace(
-            "var earthMesh = new THREE.Mesh(",
-            "var earthMesh = new THREE.Mesh("
-          ).replace(
             "earthGroup.add(earthMesh);",
             `
             earthMesh.castShadow = true;
@@ -54,9 +56,6 @@ self.addEventListener('fetch', event => {
           );
 
           html = html.replace(
-            "var moonMesh=new THREE.Mesh(",
-            "var moonMesh=new THREE.Mesh("
-          ).replace(
             "scene.add(moonMesh);",
             `
             moonMesh.castShadow = true;
@@ -66,51 +65,57 @@ self.addEventListener('fetch', event => {
           );
 
           // ─────────────────────────────
-          // ✅ SUPERMOON EPOCH SYNC
+          // ✅ INJECT VERSION + PHASE LOGIC
           // ─────────────────────────────
           html = html.replace(
             "'use strict';",
             `'use strict';
 
-            // Reference epoch: Nov 14, 2016 full moon (JD ≈ 2457706.5)
+            // ===== VERSION (epoch based) =====
+            function getShortVersion(days){
+              var yr = days / 365.24219;
+              var yInt = Math.floor(yr);
+              var frac = yr - yInt;
+              var frac3 = Math.floor(frac * 1000);
+              return 'v' + yInt + '.' + frac3.toString().padStart(3,'0');
+            }
+
+            // ===== SUPERMOON EPOCH =====
             const SUPERMOON_JD = 2457706.5;
 
             function getMoonPhaseOffset(currentJD){
               const synodic = 29.530589;
               let delta = (currentJD - SUPERMOON_JD) % synodic;
               if (delta < 0) delta += synodic;
-              return (delta / synodic) * 2*Math.PI; // radians
+              return (delta / synodic) * 2*Math.PI;
             }
             `
           );
 
           // ─────────────────────────────
-          // ✅ APPLY PHASE OFFSET
+          // ✅ APPLY MOON PHASE OFFSET
           // ─────────────────────────────
           html = html.replace(
             "var moonL = MOON.L0 + MOON.n * d;",
             `
             var moonL = MOON.L0 + MOON.n * d;
-
-            // Apply real phase alignment (supermoon epoch)
-            var phaseOffset = getMoonPhaseOffset(J2000_JD + d);
-            moonL += phaseOffset;
+            moonL += getMoonPhaseOffset(J2000_JD + d);
             `
           );
 
           // ─────────────────────────────
-          // ✅ POSITION SUN LIGHT
+          // ✅ HUD VERSION DISPLAY
           // ─────────────────────────────
           html = html.replace(
-            "sunMesh",
+            "document.getElementById('sBadge').textContent= getSeason(lambdaSun_deg);",
             `
-            sunLight.position.set(0,0,0);
-            sunMesh
+            document.getElementById('sBadge').textContent =
+              getShortVersion(state.days) + ' | ' + getSeason(lambdaSun_deg);
             `
           );
 
           // ─────────────────────────────
-          // ✅ UI hidden default
+          // ✅ UI HIDDEN DEFAULT
           // ─────────────────────────────
           html = html.replace('var uiVisible = true;', 'var uiVisible = false;');
           html = html.replace('<div id="top">', '<div id="top" class="ui-hidden">');
@@ -118,7 +123,7 @@ self.addEventListener('fetch', event => {
           html = html.replace('<div id="panelToggle"', '<div id="panelToggle" class="ui-hidden"');
 
           // ─────────────────────────────
-          // ✅ CAMERA (ecliptic view)
+          // ✅ CAMERA (ECLIPTIC VIEW)
           // ─────────────────────────────
           html = html.replace(
             'var cam = { theta:-0.42, phi:0.48, dist:22, panX:0, panY:0 };',
