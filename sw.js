@@ -1,14 +1,9 @@
-const BUILD_TIME = Date.now(); // still used for cache busting
-const CACHE = 'orbits-pwa-' + BUILD_TIME;
+const BUILD = Date.now();
+const CACHE = 'orbits-pwa-' + BUILD;
 
 self.addEventListener('install', e => self.skipWaiting());
-
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.map(k => caches.delete(k)))
-    )
-  );
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))));
   self.clients.claim();
 });
 
@@ -22,36 +17,95 @@ self.addEventListener('fetch', event => {
         .then(html => {
 
           // ─────────────────────────────
-          // ✅ SPEED FIX
+          // ✅ SPEED DEFAULT
           // ─────────────────────────────
           html = html.replace('value="3"', 'value="1"');
           html = html.replace('updateSpeedLabel(3)', 'updateSpeedLabel(1)');
 
           // ─────────────────────────────
-          // ✅ INJECT VERSION LOGIC (based on simulation time)
+          // ✅ LIGHT + SHADOW SYSTEM
+          // ─────────────────────────────
+          html = html.replace(
+            "scene.add(new THREE.PointLight(0xfff0d0, 3.0, 120));",
+            `
+            const sunLight = new THREE.PointLight(0xffffff, 2.2, 0);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+            `
+          );
+
+          html = html.replace(
+            "renderer.shadowMap.enabled = false;",
+            "renderer.shadowMap.enabled = true;"
+          );
+
+          html = html.replace(
+            "var earthMesh = new THREE.Mesh(",
+            "var earthMesh = new THREE.Mesh("
+          ).replace(
+            "earthGroup.add(earthMesh);",
+            `
+            earthMesh.castShadow = true;
+            earthMesh.receiveShadow = true;
+            earthGroup.add(earthMesh);
+            `
+          );
+
+          html = html.replace(
+            "var moonMesh=new THREE.Mesh(",
+            "var moonMesh=new THREE.Mesh("
+          ).replace(
+            "scene.add(moonMesh);",
+            `
+            moonMesh.castShadow = true;
+            moonMesh.receiveShadow = true;
+            scene.add(moonMesh);
+            `
+          );
+
+          // ─────────────────────────────
+          // ✅ SUPERMOON EPOCH SYNC
           // ─────────────────────────────
           html = html.replace(
             "'use strict';",
             `'use strict';
 
-            function getShortVersion(days){
-              var yr = days / 365.24219;
-              var yInt = Math.floor(yr);
-              var frac = yr - yInt;
-              var frac3 = Math.floor(frac * 1000);
-              return 'v' + yInt + '.' + frac3.toString().padStart(3,'0');
+            // Reference epoch: Nov 14, 2016 full moon (JD ≈ 2457706.5)
+            const SUPERMOON_JD = 2457706.5;
+
+            function getMoonPhaseOffset(currentJD){
+              const synodic = 29.530589;
+              let delta = (currentJD - SUPERMOON_JD) % synodic;
+              if (delta < 0) delta += synodic;
+              return (delta / synodic) * 2*Math.PI; // radians
             }
             `
           );
 
           // ─────────────────────────────
-          // ✅ HUD VERSION DISPLAY
+          // ✅ APPLY PHASE OFFSET
           // ─────────────────────────────
           html = html.replace(
-            "document.getElementById('sBadge').textContent= getSeason(lambdaSun_deg);",
+            "var moonL = MOON.L0 + MOON.n * d;",
             `
-            document.getElementById('sBadge').textContent =
-              getShortVersion(state.days) + ' | ' + getSeason(lambdaSun_deg);
+            var moonL = MOON.L0 + MOON.n * d;
+
+            // Apply real phase alignment (supermoon epoch)
+            var phaseOffset = getMoonPhaseOffset(J2000_JD + d);
+            moonL += phaseOffset;
+            `
+          );
+
+          // ─────────────────────────────
+          // ✅ POSITION SUN LIGHT
+          // ─────────────────────────────
+          html = html.replace(
+            "sunMesh",
+            `
+            sunLight.position.set(0,0,0);
+            sunMesh
             `
           );
 
@@ -64,7 +118,7 @@ self.addEventListener('fetch', event => {
           html = html.replace('<div id="panelToggle"', '<div id="panelToggle" class="ui-hidden"');
 
           // ─────────────────────────────
-          // ✅ CAMERA FIX (ecliptic view)
+          // ✅ CAMERA (ecliptic view)
           // ─────────────────────────────
           html = html.replace(
             'var cam = { theta:-0.42, phi:0.48, dist:22, panX:0, panY:0 };',
