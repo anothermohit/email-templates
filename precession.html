@@ -1,77 +1,242 @@
 <!DOCTYPE html>
+
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Earth–Sun–Moon: Precise 3D</title>
-
-<!-- ✅ PWA: iPhone fullscreen -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Orbits">
-<meta name="theme-color" content="#000000">
-
-<!-- ✅ PWA: Manifest injected dynamically -->
-
 <style>
-/* ===== YOUR ORIGINAL CSS (UNCHANGED) ===== */
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { width:100%; height:100%; background:#000; overflow:hidden; }
 #c { position:fixed; top:0; left:0; width:100%; height:100%; z-index:1; touch-action:none; }
 #ui { position:fixed; inset:0; pointer-events:none; z-index:10; }
-/* (rest of your CSS stays EXACTLY the same) */
+
+/* TOP */
+#top {
+position:absolute; top:0; left:0; right:0;
+background:rgba(2,4,12,0.92); border-bottom:1px solid #1e2a4a;
+padding:6px 8px; display:flex; align-items:center; gap:5px; flex-wrap:wrap;
+pointer-events:all;
+transition: transform 0.25s ease, opacity 0.25s ease;
+}
+#top.ui-hidden { transform: translateY(-110%); opacity:0; pointer-events:none; }
+#title { color:#c9a84c; font-size:11px; font-family:‘Courier New’,monospace; letter-spacing:.5px; font-style:italic; white-space:nowrap; }
+button {
+background:#080d1c; color:#e8b84b; border:1px solid #7a6230;
+padding:5px 9px; font-size:11px; border-radius:2px; font-family:‘Courier New’,monospace;
+cursor:pointer; touch-action:manipulation; user-select:none; -webkit-user-select:none;
+-webkit-tap-highlight-color:rgba(201,168,76,0.25); white-space:nowrap;
+}
+button.on { background:rgba(201,168,76,0.16); border-color:#e8b84b; color:#ffd060; }
+.ctrl { color:#4a5878; font-size:10px; font-family:‘Courier New’,monospace; display:flex; align-items:center; gap:3px; white-space:nowrap; }
+.ctrl input[type=range] {
+-webkit-appearance:none; appearance:none; width:55px; height:3px;
+background:#181f36; border-radius:2px; outline:none; touch-action:manipulation;
+}
+.ctrl input[type=range]::-webkit-slider-thumb {
+-webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:#c9a84c; border:1px solid #000;
+}
+.sv { color:#e8b84b; min-width:30px; }
+
+/* RIGHT INFO PANEL */
+#panel {
+position:absolute; top:44px; right:0; width:220px;
+background:rgba(2,4,12,0.88); border-left:1px solid #1e2a4a;
+font-family:‘Courier New’,monospace; font-size:10px; color:#4a5878;
+overflow-y:auto; max-height:calc(100% - 180px);
+pointer-events:all;
+transition:transform 0.22s ease;
+}
+#panel.hidden { transform:translateX(220px); }
+#panelToggle {
+position:absolute; top:48px; right:0;
+background:rgba(2,4,12,0.92); border-left:1px solid #1e2a4a;
+border-bottom:1px solid #1e2a4a; border-top:1px solid #1e2a4a;
+color:#c9a84c; font-family:‘Courier New’,monospace; font-size:10px;
+padding:5px 7px; cursor:pointer; pointer-events:all;
+touch-action:manipulation; user-select:none; -webkit-user-select:none;
+z-index:20; letter-spacing:.5px; writing-mode:vertical-rl;
+-webkit-tap-highlight-color:rgba(201,168,76,0.25);
+border-radius:3px 0 0 3px;
+transition: opacity 0.25s ease;
+}
+#panelToggle.ui-hidden { opacity:0; pointer-events:none; }
+.psec { border-bottom:1px solid #1a2240; padding:8px 10px; }
+.psec-title { color:#c9a84c; font-size:9px; letter-spacing:2px; text-transform:uppercase; margin-bottom:5px; }
+.prow { display:flex; justify-content:space-between; margin-bottom:3px; }
+.pkey { color:#556688; }
+.pval { color:#e8b84b; text-align:right; }
+.pval.green { color:#88ff88; }
+.pval.blue  { color:#88bbff; }
+.pval.silver{ color:#ccccdd; }
+.pval.red   { color:#ff8866; }
+.pval.cyan  { color:#44ddcc; }
+.pval.white { color:#f0f0f0; }
+
+/* BOTTOM HUD */
+#hud {
+position:absolute; bottom:0; left:0; right:0;
+background:rgba(2,4,12,0.88); border-top:1px solid #1e2a4a;
+padding:6px 10px 8px; display:grid;
+grid-template-columns:repeat(4,1fr); gap:2px 8px;
+font-family:‘Courier New’,monospace; font-size:10px; color:#4a5878;
+pointer-events:none;
+transition:right 0.22s ease, transform 0.25s ease, opacity 0.25s ease;
+}
+#hud.ui-hidden { transform: translateY(110%); opacity:0; }
+.season { grid-column:1/-1; text-align:center; color:#88ff88; font-size:11px; font-style:italic; padding-bottom:3px; }
+.hv { color:#e8b84b; }
+
+/* LEGEND */
+#legend {
+position:absolute; bottom:0; right:0; width:220px;
+background:rgba(2,4,12,0.88); border-top:1px solid #1e2a4a; border-left:1px solid #1e2a4a;
+padding:7px 10px; font-family:‘Courier New’,monospace; font-size:9.5px;
+pointer-events:none;
+transition:transform 0.22s ease;
+}
+#legend.hidden { transform:translateX(220px); }
+.leg-row { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+.leg-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.leg-line { width:18px; height:2px; flex-shrink:0; }
+.leg-label { color:#6688aa; }
 </style>
+
 </head>
-
 <body>
-
-<!-- ===== YOUR ORIGINAL HTML (UNCHANGED) ===== -->
 <canvas id="c"></canvas>
 <div id="ui">
-<!-- KEEP EVERYTHING YOU WROTE EXACTLY HERE -->
-</div>
 
-<!-- THREE -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <div id="top">
+    <span id="title">Earth · Sun · Moon — Precise 3D Dynamics</span>
+    <button id="playBtn" class="on">&#9654;</button>
+    <button id="stopBtn">&#9646;&#9646;</button>
+    <button id="rstBtn">&#8635;</button>
+    <span class="ctrl">Speed <input type="range" id="spd" min="1" max="7" value="3" step="0.01"> <span class="sv" id="spdV">1 yr/s</span></span>
+    <button id="trailBtn" class="on">Trails</button>
+    <button id="gridBtn" class="on">Ecliptic</button>
+    <button id="annotBtn" class="on">Labels</button>
+    <button id="moonOrbitBtn" class="on">Moon Orbit</button>
+  </div>
 
-<!-- =========================
-     ✅ PWA CORE (ADDED)
-========================= -->
-<script>
-/* ===== Manifest (inline) ===== */
-const manifest = {
-  name: "Earth Sun Moon Precise 3D",
-  short_name: "Orbits",
-  start_url: ".",
-  display: "standalone",
-  background_color: "#000000",
-  theme_color: "#000000"
-};
+  <div id="panelToggle" style="right:0" title="Toggle details panel">☰ Info</div>
+  <div id="panel" class="hidden">
+    <!-- Sun -->
+    <div class="psec">
+      <div class="psec-title">☀ Sun (Heliocentric)</div>
+      <div class="prow"><span class="pkey">Radius</span><span class="pval white">695,700 km</span></div>
+      <div class="prow"><span class="pkey">Mass</span><span class="pval white">1.989×10³⁰ kg</span></div>
+      <div class="prow"><span class="pkey">GM☉ (TDB)</span><span class="pval white">1.32712440018×10²⁰ m³/s²</span></div>
+      <div class="prow"><span class="pkey">Spectral type</span><span class="pval white">G2V</span></div>
+    </div>
+    <!-- Earth orbit -->
+    <div class="psec">
+      <div class="psec-title">🌍 Earth Orbit (VSOP87/IAU 2006)</div>
+      <div class="prow"><span class="pkey">Semi-major axis a</span><span class="pval">1.000001018 AU</span></div>
+      <div class="prow"><span class="pkey">1 AU (IAU 2012)</span><span class="pval">149,597,870.7 km</span></div>
+      <div class="prow"><span class="pkey">Eccentricity e</span><span class="pval">0.016708634</span></div>
+      <div class="prow"><span class="pkey">Perihelion lon ϖ</span><span class="pval">102.9373°</span></div>
+      <div class="prow"><span class="pkey">Perihelion dist</span><span class="pval">147,098,291 km</span></div>
+      <div class="prow"><span class="pkey">Aphelion dist</span><span class="pval">152,097,701 km</span></div>
+      <div class="prow"><span class="pkey">Tropical year</span><span class="pval">365.24219 d</span></div>
+      <div class="prow"><span class="pkey">Sidereal year</span><span class="pval">365.25636 d</span></div>
+      <div class="prow"><span class="pkey">Anomalistic year</span><span class="pval">365.25964 d</span></div>
+      <div class="prow"><span class="pkey">Perihelion date</span><span class="pval" id="periDate">~Jan 3</span></div>
+      <div class="prow"><span class="pkey">Earth-Sun now</span><span class="pval" id="esDist">—</span></div>
+      <div class="prow"><span class="pkey">Angular diam Sun</span><span class="pval" id="sunAngDiam">—</span></div>
+    </div>
+    <!-- Earth -->
+    <div class="psec">
+      <div class="psec-title">🌍 Earth (Physical)</div>
+      <div class="prow"><span class="pkey">Radius (equat.)</span><span class="pval blue">6,378.137 km</span></div>
+      <div class="prow"><span class="pkey">Radius (polar)</span><span class="pval blue">6,356.752 km</span></div>
+      <div class="prow"><span class="pkey">Flattening f</span><span class="pval blue">1/298.257</span></div>
+      <div class="prow"><span class="pkey">Obliquity ε J2000</span><span class="pval blue">23°26′21.406″</span></div>
+      <div class="prow"><span class="pkey">Obliquity now</span><span class="pval blue" id="epsNow">23.436°</span></div>
+      <div class="prow"><span class="pkey">ε rate (IAU2006)</span><span class="pval blue">−46.84″/cy</span></div>
+      <div class="prow"><span class="pkey">Sidereal day</span><span class="pval blue">23h 56m 04.09s</span></div>
+      <div class="prow"><span class="pkey">J₂ (oblateness)</span><span class="pval blue">1.08263×10⁻³</span></div>
+    </div>
+    <!-- Precession -->
+    <div class="psec">
+      <div class="psec-title">♈ Precession (IAU 2006 P03)</div>
+      <div class="prow"><span class="pkey">General prec. ψ̇</span><span class="pval cyan">5029.097″/cy</span></div>
+      <div class="prow"><span class="pkey">= per year</span><span class="pval cyan">50.291″/yr</span></div>
+      <div class="prow"><span class="pkey">Platonic year</span><span class="pval cyan">25,771.6 yr</span></div>
+      <div class="prow"><span class="pkey">Luni-solar prec.</span><span class="pval cyan">5038.481″/cy</span></div>
+      <div class="prow"><span class="pkey">Planetary prec.</span><span class="pval cyan">−9.384″/cy</span></div>
+      <div class="prow"><span class="pkey">ψ now</span><span class="pval cyan" id="psiNow">0.000°</span></div>
+      <div class="prow"><span class="pkey">VE longitude</span><span class="pval cyan" id="veNow">0h 00m</span></div>
+      <div class="prow"><span class="pkey">Pole star</span><span class="pval cyan" id="poleStar">Polaris</span></div>
+    </div>
+    <!-- Moon orbit -->
+    <div class="psec">
+      <div class="psec-title">🌙 Moon Orbit (ELP 2000-82)</div>
+      <div class="prow"><span class="pkey">Semi-major axis a</span><span class="pval silver">384,400 km</span></div>
+      <div class="prow"><span class="pkey">Eccentricity e</span><span class="pval silver">0.0549</span></div>
+      <div class="prow"><span class="pkey">Inclination i</span><span class="pval silver">5.145° to ecliptic</span></div>
+      <div class="prow"><span class="pkey">Sidereal period</span><span class="pval silver">27.321661 d</span></div>
+      <div class="prow"><span class="pkey">Synodic period</span><span class="pval silver">29.530589 d</span></div>
+      <div class="prow"><span class="pkey">Draconic period</span><span class="pval silver">27.212221 d</span></div>
+      <div class="prow"><span class="pkey">Anomalistic period</span><span class="pval silver">27.554551 d</span></div>
+      <div class="prow"><span class="pkey">Node precession</span><span class="pval silver">−19.355°/yr</span></div>
+      <div class="prow"><span class="pkey">Node period</span><span class="pval silver">18.6129 yr</span></div>
+      <div class="prow"><span class="pkey">Apse precession</span><span class="pval silver">+40.690°/yr</span></div>
+      <div class="prow"><span class="pkey">Apse period</span><span class="pval silver">8.8505 yr</span></div>
+      <div class="prow"><span class="pkey">Saros cycle</span><span class="pval silver">18.03 yr</span></div>
+      <div class="prow"><span class="pkey">Metonic cycle</span><span class="pval silver">19 yr / 235 mon</span></div>
+      <div class="prow"><span class="pkey">Earth-Moon now</span><span class="pval silver" id="emDist">—</span></div>
+      <div class="prow"><span class="pkey">Angular diam Moon</span><span class="pval silver" id="moonAngDiam">—</span></div>
+    </div>
+    <!-- Moon physical -->
+    <div class="psec">
+      <div class="psec-title">🌙 Moon (Physical)</div>
+      <div class="prow"><span class="pkey">Radius (mean)</span><span class="pval silver">1,737.4 km</span></div>
+      <div class="prow"><span class="pkey">Mass</span><span class="pval silver">7.342×10²² kg</span></div>
+      <div class="prow"><span class="pkey">GM☾</span><span class="pval silver">4.9048×10¹² m³/s²</span></div>
+      <div class="prow"><span class="pkey">Moon/Earth mass</span><span class="pval silver">1/81.3</span></div>
+      <div class="prow"><span class="pkey">Phase</span><span class="pval silver" id="moonPhase">New Moon</span></div>
+      <div class="prow"><span class="pkey">Age in cycle</span><span class="pval silver" id="moonAge">0.0 d</span></div>
+    </div>
+    <!-- Cycles -->
+    <div class="psec">
+      <div class="psec-title">⏱ Key Cycles</div>
+      <div class="prow"><span class="pkey">Eclipse season</span><span class="pval red">173.3 d</span></div>
+      <div class="prow"><span class="pkey">Saros (eclipse)</span><span class="pval red">6585.32 d</span></div>
+      <div class="prow"><span class="pkey">Inex period</span><span class="pval red">10,571.95 d</span></div>
+      <div class="prow"><span class="pkey">Metonic (lunisolar)</span><span class="pval red">6939.69 d</span></div>
+      <div class="prow"><span class="pkey">Callippic</span><span class="pval red">4×Metonic−1d</span></div>
+      <div class="prow"><span class="pkey">Obliquity range</span><span class="pval red">22.1°–24.5°</span></div>
+      <div class="prow"><span class="pkey">Obliquity period</span><span class="pval red">~41,000 yr</span></div>
+      <div class="prow"><span class="pkey">Eccentricity period</span><span class="pval red">~100,000 yr</span></div>
+    </div>
+  </div><!-- /panel -->
 
-const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-const url = URL.createObjectURL(blob);
+  <div id="hud">
+    <div class="season" id="sBadge">Vernal Equinox</div>
+    <div>Year <span class="hv" id="hYr">+2000.0</span></div>
+    <div>Ecl. lon λ☉ <span class="hv" id="hLon">0.0°</span></div>
+    <div>Julian Day <span class="hv" id="hJD">2451545.0</span></div>
+    <div>Days elapsed <span class="hv" id="hDays">0</span></div>
+    <div>Earth r <span class="hv" id="hR">1.000 AU</span></div>
+    <div>Moon r <span class="hv" id="hMR">384,400 km</span></div>
+    <div>Node Ω <span class="hv" id="hNode">125.04°</span></div>
+    <div>Apse ω <span class="hv" id="hApse">318.30°</span></div>
+  </div>
 
-const link = document.createElement('link');
-link.rel = 'manifest';
-link.href = url;
-document.head.appendChild(link);
+  <div id="legend" class="hidden">
+    <div class="leg-row"><div class="leg-dot" style="background:#ffe060"></div><span class="leg-label">Sun (focus of orbit)</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#4488ee"></div><span class="leg-label">Earth</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#ccccdd"></div><span class="leg-label">Moon</span></div>
+    <div class="leg-row"><div class="leg-dot" style="background:#ffd060"></div><span class="leg-label">North Celestial Pole (NCP)</span></div>
+    <div class="leg-row"><div class="leg-line" style="background:#88ff88"></div><span class="leg-label">Vernal Equinox direction</span></div>
+    <div class="leg-row"><div class="leg-line" style="background:#ff8844"></div><span class="leg-label">Moon ascending node</span></div>
+    <div class="leg-row"><div class="leg-line" style="background:#4488ff"></div><span class="leg-label">Earth spin axis (NCP→SCP)</span></div>
+    <div class="leg-row"><div class="leg-line" style="background:#c9a84c"></div><span class="leg-label">NCP precession trail</span></div>
+    <div class="leg-row"><div class="leg-line" style="background:#446688; height:1px"></div><span class="leg-label">Ecliptic plane</span></div>
+  </div>
 
-/* ===== Service Worker (inline) ===== */
-if ('serviceWorker' in navigator) {
-  const swBlob = new Blob([`
-    self.addEventListener('install', e => self.skipWaiting());
-    self.addEventListener('activate', e => self.clients.claim());
-    self.addEventListener('fetch', e => {});
-  `], {type:'application/javascript'});
-
-  navigator.serviceWorker.register(URL.createObjectURL(swBlob));
-}
-</script>
-
-<!-- =========================
-     🌍 YOUR FULL ORIGINAL SCRIPT
-     (PASTE YOUR ENTIRE JS HERE — NO CHANGES)
-========================= -->
+</div><!-- /ui -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
@@ -958,7 +1123,6 @@ function animate(ts){
 
 requestAnimationFrame(animate);
 </script>
-
 
 </body>
 </html>
