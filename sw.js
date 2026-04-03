@@ -21,24 +21,23 @@ self.addEventListener('fetch', event => {
         .then(res => res.text())
         .then(html => {
 
-          // ─────────────────────────────
-          // ✅ DEFAULT SPEED
-          // ─────────────────────────────
+          // ✅ SPEED
           html = html.replace('value="3"', 'value="1"');
           html = html.replace('updateSpeedLabel(3)', 'updateSpeedLabel(1)');
 
           // ─────────────────────────────
-          // ✅ LIGHT + SHADOW
+          // ✅ ENABLE SHADOWS (NO NEW LIGHT)
           // ─────────────────────────────
           html = html.replace(
             "renderer.shadowMap.enabled = false;",
             "renderer.shadowMap.enabled = true;"
           );
 
+          // Modify existing light instead of creating new one
           html = html.replace(
             "scene.add(new THREE.PointLight(0xfff0d0, 3.0, 120));",
             `
-            const sunLight = new THREE.PointLight(0xffffff, 2.2, 0);
+            const sunLight = new THREE.PointLight(0xfff0d0, 2.2, 0);
             sunLight.castShadow = true;
             sunLight.shadow.mapSize.width = 2048;
             sunLight.shadow.mapSize.height = 2048;
@@ -46,6 +45,7 @@ self.addEventListener('fetch', event => {
             `
           );
 
+          // Earth shadows
           html = html.replace(
             "earthGroup.add(earthMesh);",
             `
@@ -55,6 +55,7 @@ self.addEventListener('fetch', event => {
             `
           );
 
+          // Moon shadows
           html = html.replace(
             "scene.add(moonMesh);",
             `
@@ -65,13 +66,12 @@ self.addEventListener('fetch', event => {
           );
 
           // ─────────────────────────────
-          // ✅ INJECT VERSION + PHASE LOGIC
+          // ✅ VERSION + PHASE
           // ─────────────────────────────
           html = html.replace(
             "'use strict';",
             `'use strict';
 
-            // ===== VERSION (epoch based) =====
             function getShortVersion(days){
               var yr = days / 365.24219;
               var yInt = Math.floor(yr);
@@ -80,7 +80,6 @@ self.addEventListener('fetch', event => {
               return 'v' + yInt + '.' + frac3.toString().padStart(3,'0');
             }
 
-            // ===== SUPERMOON EPOCH =====
             const SUPERMOON_JD = 2457706.5;
 
             function getMoonPhaseOffset(currentJD){
@@ -92,9 +91,7 @@ self.addEventListener('fetch', event => {
             `
           );
 
-          // ─────────────────────────────
-          // ✅ APPLY MOON PHASE OFFSET
-          // ─────────────────────────────
+          // Apply phase
           html = html.replace(
             "var moonL = MOON.L0 + MOON.n * d;",
             `
@@ -103,9 +100,7 @@ self.addEventListener('fetch', event => {
             `
           );
 
-          // ─────────────────────────────
-          // ✅ HUD VERSION DISPLAY
-          // ─────────────────────────────
+          // Version display
           html = html.replace(
             "document.getElementById('sBadge').textContent= getSeason(lambdaSun_deg);",
             `
@@ -114,17 +109,13 @@ self.addEventListener('fetch', event => {
             `
           );
 
-          // ─────────────────────────────
-          // ✅ UI HIDDEN DEFAULT
-          // ─────────────────────────────
+          // UI hidden
           html = html.replace('var uiVisible = true;', 'var uiVisible = false;');
           html = html.replace('<div id="top">', '<div id="top" class="ui-hidden">');
           html = html.replace('<div id="hud">', '<div id="hud" class="ui-hidden">');
           html = html.replace('<div id="panelToggle"', '<div id="panelToggle" class="ui-hidden"');
 
-          // ─────────────────────────────
-          // ✅ CAMERA (ECLIPTIC VIEW)
-          // ─────────────────────────────
+          // Camera
           html = html.replace(
             'var cam = { theta:-0.42, phi:0.48, dist:22, panX:0, panY:0 };',
             'var cam = { theta:0, phi:0.02, dist:18, panX:0, panY:0 };'
