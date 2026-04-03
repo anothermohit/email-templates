@@ -28,62 +28,43 @@ self.addEventListener("activate", event => {
 });
 
 // ─────────────────────────────
-// FETCH (CRITICAL FIX HERE)
+// FETCH
 // ─────────────────────────────
 self.addEventListener("fetch", event => {
 
-  // Only intercept page loads
   if (event.request.mode === "navigate") {
 
     console.log("SW intercept:", event.request.url);
 
     event.respondWith(
-      fetch(event.request, { cache: "no-store" }) // 🔥 BYPASS GITHUB CACHE
-        .then(response => {
-          console.log("Fetched fresh HTML");
-          return response.text();
-        })
+      fetch(event.request, { cache: "no-store" })
+        .then(response => response.text())
         .then(html => {
 
-          console.log("Injecting debug overlay...");
+          console.log("Injecting header version...");
 
           try {
 
-            // ─────────────────────────────
-            // DEBUG OVERLAY (CANNOT MISS)
-            // ─────────────────────────────
             html = html.replace(
               "</body>",
               `
-              <div style="
-                position:fixed;
-                top:20px;
-                left:20px;
-                background:#ff0000;
-                color:#ffffff;
-                font-size:18px;
-                font-family:monospace;
-                padding:10px 14px;
-                z-index:999999;
-                border-radius:4px;
-              ">
-                SW ACTIVE ${VERSION}
-              </div>
+              <script>
+                console.log("SW VERSION INJECTED:", "${VERSION}");
 
-              <div style="
-                position:fixed;
-                bottom:10px;
-                left:50%;
-                transform:translateX(-50%);
-                color:#e8b84b;
-                font-size:12px;
-                font-family:monospace;
-                z-index:999999;
-                opacity:0.9;
-                pointer-events:none;
-              ">
-                ${VERSION}
-              </div>
+                (function() {
+                  const el =
+                    document.querySelector('#header') ||
+                    document.querySelector('header') ||
+                    document.querySelector('h1');
+
+                  if (el) {
+                    el.innerText += " (v${VERSION})";
+                    console.log("✔ Header updated");
+                  } else {
+                    console.log("❌ Header not found");
+                  }
+                })();
+              </script>
 
               </body>`
             );
@@ -101,8 +82,6 @@ self.addEventListener("fetch", event => {
         })
         .catch(err => {
           console.error("❌ Fetch failed:", err);
-
-          // fallback
           return fetch(event.request);
         })
     );
