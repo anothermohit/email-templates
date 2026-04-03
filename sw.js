@@ -41,7 +41,7 @@ self.addEventListener("fetch", event => {
         .then(response => response.text())
         .then(html => {
 
-          console.log("Injecting Bangalore observer override...");
+          console.log("Injecting Bangalore observer...");
 
           try {
 
@@ -55,18 +55,52 @@ self.addEventListener("fetch", event => {
 
                   const BANGALORE = { lat: 12.9716, lon: 77.5946 };
 
-                  // 🔥 Global override your app can read
-                  window.__OBSERVER_OVERRIDE__ = BANGALORE;
-                  window.__USE_BANGALORE__ = true;
+                  function applyOverride() {
 
-                  // 🌙 Phase check (if SunCalc exists)
-                  if (window.SunCalc) {
-                    const now = new Date();
-                    const illum = SunCalc.getMoonIllumination(now);
-                    console.log("🌙 Bangalore moon phase:", illum.phase);
+                    // 🔥 Try your app's likely functions
+                    if (window.setObserver) {
+                      window.setObserver(BANGALORE.lat, BANGALORE.lon);
+                      console.log("✔ Applied via setObserver");
+                      return true;
+                    }
+
+                    if (window.updateLocation) {
+                      window.updateLocation(BANGALORE.lat, BANGALORE.lon);
+                      console.log("✔ Applied via updateLocation");
+                      return true;
+                    }
+
+                    if (window.setLocation) {
+                      window.setLocation(BANGALORE.lat, BANGALORE.lon);
+                      console.log("✔ Applied via setLocation");
+                      return true;
+                    }
+
+                    // fallback (if app reads globals)
+                    window.__OBSERVER_OVERRIDE__ = BANGALORE;
+
+                    return false;
                   }
 
-                  console.log("✔ Bangalore override ready");
+                  // try immediately
+                  if (!applyOverride()) {
+
+                    let tries = 0;
+
+                    const interval = setInterval(() => {
+                      tries++;
+
+                      if (applyOverride()) {
+                        clearInterval(interval);
+                      }
+
+                      if (tries > 20) {
+                        console.log("❌ Could not hook observer");
+                        clearInterval(interval);
+                      }
+
+                    }, 300);
+                  }
 
                 })();
               </script>
