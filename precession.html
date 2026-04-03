@@ -17,7 +17,9 @@ position:absolute; top:0; left:0; right:0;
 background:rgba(2,4,12,0.92); border-bottom:1px solid #1e2a4a;
 padding:6px 8px; display:flex; align-items:center; gap:5px; flex-wrap:wrap;
 pointer-events:all;
+transition: transform 0.25s ease, opacity 0.25s ease;
 }
+#top.ui-hidden { transform: translateY(-110%); opacity:0; pointer-events:none; }
 #title { color:#c9a84c; font-size:11px; font-family:‘Courier New’,monospace; letter-spacing:.5px; font-style:italic; white-space:nowrap; }
 button {
 background:#080d1c; color:#e8b84b; border:1px solid #7a6230;
@@ -56,7 +58,9 @@ touch-action:manipulation; user-select:none; -webkit-user-select:none;
 z-index:20; letter-spacing:.5px; writing-mode:vertical-rl;
 -webkit-tap-highlight-color:rgba(201,168,76,0.25);
 border-radius:3px 0 0 3px;
+transition: opacity 0.25s ease;
 }
+#panelToggle.ui-hidden { opacity:0; pointer-events:none; }
 .psec { border-bottom:1px solid #1a2240; padding:8px 10px; }
 .psec-title { color:#c9a84c; font-size:9px; letter-spacing:2px; text-transform:uppercase; margin-bottom:5px; }
 .prow { display:flex; justify-content:space-between; margin-bottom:3px; }
@@ -77,8 +81,9 @@ padding:6px 10px 8px; display:grid;
 grid-template-columns:repeat(4,1fr); gap:2px 8px;
 font-family:‘Courier New’,monospace; font-size:10px; color:#4a5878;
 pointer-events:none;
-transition:right 0.22s ease;
+transition:right 0.22s ease, transform 0.25s ease, opacity 0.25s ease;
 }
+#hud.ui-hidden { transform: translateY(110%); opacity:0; }
 .season { grid-column:1/-1; text-align:center; color:#88ff88; font-size:11px; font-style:italic; padding-bottom:3px; }
 .hv { color:#e8b84b; }
 
@@ -107,7 +112,7 @@ transition:transform 0.22s ease;
     <button id="playBtn" class="on">&#9654;</button>
     <button id="stopBtn">&#9646;&#9646;</button>
     <button id="rstBtn">&#8635;</button>
-    <span class="ctrl">Speed <input type="range" id="spd" min="0.1" max="100" value="10" step="0.1"> <span class="sv" id="spdV">10×</span></span>
+    <span class="ctrl">Speed <input type="range" id="spd" min="1" max="7" value="3" step="0.01"> <span class="sv" id="spdV">1 yr/s</span></span>
     <button id="trailBtn" class="on">Trails</button>
     <button id="gridBtn" class="on">Ecliptic</button>
     <button id="annotBtn" class="on">Labels</button>
@@ -566,7 +571,39 @@ scene.add(earthGroup);
 
 // Globe
 var earthMat = new THREE.MeshPhongMaterial({color:0x2255cc,emissive:0x001133,shininess:60});
-earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R,36,36), earthMat));
+var earthMesh = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R,36,36), earthMat);
+earthGroup.add(earthMesh);
+
+// Rotation marker: bright spike at equator (0° lat, 0° lon = Greenwich)
+// Sits on earthMesh so it rotates with daily spin
+var markerGroup = new THREE.Group();
+earthMesh.add(markerGroup);
+// Spike pointing outward along +X (equator, prime meridian)
+var spikeMat = new THREE.MeshBasicMaterial({color:0xff4400});
+var spikeMesh = new THREE.Mesh(
+  new THREE.ConeGeometry(0.018, 0.10, 8),
+  spikeMat
+);
+// Cone points along +Y by default; rotate to point along +X
+spikeMesh.rotation.z = -Math.PI/2;
+spikeMesh.position.set(EARTH_R + 0.05, 0, 0);
+markerGroup.add(spikeMesh);
+// Small base dot on surface
+var markerDot = new THREE.Mesh(
+  new THREE.SphereGeometry(0.022, 8, 8),
+  new THREE.MeshBasicMaterial({color:0xff6622})
+);
+markerDot.position.set(EARTH_R, 0, 0);
+markerGroup.add(markerDot);
+// Thin line from centre to spike (shows rotation clearly)
+var markerLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0,0,0),
+    new THREE.Vector3(EARTH_R*1.5,0,0)
+  ]),
+  new THREE.LineBasicMaterial({color:0xff4400, transparent:true, opacity:0.6})
+);
+markerGroup.add(markerLine);
 
 // Spin axis line (through Earth, local +Y = NCP direction)
 var eAxisLine = new THREE.Line(
@@ -692,11 +729,13 @@ canvas.addEventListener('wheel',function(e){
 canvas.addEventListener('contextmenu',function(e){ e.preventDefault(); });
 
 // Touch
-var tc={}, pinch0={d:0,cd:0}, td={active:false,sx:0,sy:0,ct:0,cp:0};
+var tc={}, tcStart={}, pinch0={d:0,cd:0}, td={active:false,sx:0,sy:0,ct:0,cp:0};
 canvas.addEventListener('touchstart',function(e){
   if(e.target!==canvas) return; e.preventDefault();
   for(var i=0;i<e.changedTouches.length;i++){
-    var t=e.changedTouches[i]; tc[t.identifier]={x:t.clientX,y:t.clientY};
+    var t=e.changedTouches[i];
+    tc[t.identifier]={x:t.clientX,y:t.clientY};
+    tcStart[t.identifier]={x:t.clientX,y:t.clientY}; // save start for tap detection
   }
   var ids=Object.keys(tc);
   if(ids.length===1){
@@ -726,9 +765,44 @@ canvas.addEventListener('touchmove',function(e){
   }
 },{passive:false});
 canvas.addEventListener('touchend',function(e){
-  for(var i=0;i<e.changedTouches.length;i++) delete tc[e.changedTouches[i].identifier];
+  // Tap detection: single finger, moved less than 8px
+  if(Object.keys(tc).length===1 && e.changedTouches.length===1){
+    var t=e.changedTouches[0];
+    var start=tcStart[t.identifier];
+    if(start){
+      var dx=t.clientX-start.x, dy=t.clientY-start.y;
+      if(Math.hypot(dx,dy)<8) toggleUI();
+    }
+  }
+  for(var i=0;i<e.changedTouches.length;i++){
+    delete tc[e.changedTouches[i].identifier];
+    delete tcStart[e.changedTouches[i].identifier];
+  }
   if(Object.keys(tc).length===0) td.active=false;
 },{passive:false});
+
+// Mouse click on canvas also toggles UI
+canvas.addEventListener('click', function(e){
+  // Only toggle if it was a real click (not end of a drag)
+  if(Math.abs(e.clientX - drag.sx) < 5 && Math.abs(e.clientY - drag.sy) < 5) toggleUI();
+});
+
+var uiVisible = true;
+function toggleUI(){
+  uiVisible = !uiVisible;
+  var top = document.getElementById('top');
+  var hud = document.getElementById('hud');
+  var pt  = document.getElementById('panelToggle');
+  if(uiVisible){
+    top.classList.remove('ui-hidden');
+    hud.classList.remove('ui-hidden');
+    pt.classList.remove('ui-hidden');
+  } else {
+    top.classList.add('ui-hidden');
+    hud.classList.add('ui-hidden');
+    pt.classList.add('ui-hidden');
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SIMULATION STATE
@@ -767,8 +841,19 @@ document.getElementById('rstBtn').addEventListener('click',function(){
   document.getElementById('stopBtn').className='';
 });
 document.getElementById('spd').addEventListener('input',function(){
-  document.getElementById('spdV').textContent=parseFloat(this.value).toFixed(1)+'×';
+  updateSpeedLabel(parseFloat(this.value));
 });
+function updateSpeedLabel(v) {
+  var daysPerSec = Math.pow(10, v);
+  var yrPerSec = daysPerSec / 365.24219;
+  var label;
+  if (yrPerSec < 1)       label = (daysPerSec).toFixed(1) + ' d/s';
+  else if (yrPerSec < 10)  label = yrPerSec.toFixed(2) + ' yr/s';
+  else if (yrPerSec < 1000) label = yrPerSec.toFixed(0) + ' yr/s';
+  else                     label = (yrPerSec/1000).toFixed(1) + ' kyr/s';
+  document.getElementById('spdV').textContent = label;
+}
+updateSpeedLabel(3); // init label for default value=3
 document.getElementById('trailBtn').addEventListener('click',function(){
   showTrailFlag=!showTrailFlag; trailLine.visible=showTrailFlag;
   this.className=showTrailFlag?'on':'';
@@ -823,13 +908,23 @@ function animate(ts){
   lastT=ts;
 
   if(state.running && dt>0){
-    var spd = parseFloat(document.getElementById('spd').value);
-    // spd × real_seconds → simulated days
-    // spd=1 → 1 day/sec; spd=10 → 10 days/sec
-    var dDays = spd * dt;
-    state.days  += dDays;
-    // Earth sidereal rotation: one turn per 0.9972696 days (sidereal day / solar day ratio)
-    state.spin  += dDays * TWO_PI / 0.9972696;
+    // Speed slider is log10 scale: value v → 10^v days/sec
+    // v=1 → 10 days/s (~0.027 yr/s)
+    // v=2 → 100 days/s (~0.27 yr/s)
+    // v=3 → 1000 days/s (~2.74 yr/s)  ← default
+    // v=4 → 10000 days/s (~27.4 yr/s)
+    // v=5 → 100000 days/s (~274 yr/s)
+    // v=6 → 1000000 days/s (~2740 yr/s)
+    // v=7 → 10000000 days/s (~27400 yr/s) — full prec cycle in ~1s
+    var v = parseFloat(document.getElementById('spd').value);
+    var daysPerSec = Math.pow(10, v);
+    var dDays = daysPerSec * dt;
+    state.days += dDays;
+    // Earth sidereal spin: 1 sidereal day = 0.9972696 solar days
+    state.spin += dDays * TWO_PI / 0.9972696;
+    // Precession is NOT separately controlled — it is 100% derived from
+    // state.days via IAU 2006 formula getPsiRad(T_yr). The ratio is
+    // automatically exact: 1 orbit per tropical year, 1 prec cycle per 25771.6 yr.
   }
 
   // ── Derived quantities ────────────────────────────────────────────────
@@ -869,18 +964,21 @@ function animate(ts){
   earthGroup.position.set(ex, 0, ez);
 
   // ── NCP direction (ecliptic frame) ────────────────────────────────────
-  // NCP = (sin ε cos ψ, cos ε, −sin ε sin ψ)
+  // NCP = (sin ε cos ψ, cos ε, −sin ε sin ψ)  [IAU 2006]
   var ncpX = Math.sin(epsRad)*Math.cos(psiRad);
   var ncpY = Math.cos(epsRad);
   var ncpZ = -Math.sin(epsRad)*Math.sin(psiRad);
   var ncpDir = new THREE.Vector3(ncpX,ncpY,ncpZ).normalize();
 
-  // Orient Earth: local +Y → ncpDir, then apply sidereal spin
+  // Orient entire earthGroup by TILT ONLY (no spin) — axis line & equator ring stay stable
   _q1.setFromUnitVectors(_up, ncpDir);
-  _q2.setFromAxisAngle(ncpDir, state.spin);
-  earthGroup.quaternion.copy(_q2).premultiply(_q1);
+  earthGroup.quaternion.copy(_q1);
 
-  // Equatorial plane (world space)
+  // Apply daily spin ONLY to the globe mesh (first child), not the axis or rings
+  _q2.setFromAxisAngle(_up, state.spin); // spin around local +Y (= ncpDir after group tilt)
+  earthMesh.quaternion.copy(_q2);
+
+  // Equatorial plane (world space) — tilt only, no spin
   eqPlane.position.copy(earthGroup.position);
   eqPlane.quaternion.copy(_q1);
 
