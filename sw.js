@@ -1,4 +1,4 @@
-const VERSION = "v8"; // 🔥 increment every update
+const VERSION = "v9"; // 🔥 increment every update
 const CACHE = "orbits-pwa-" + VERSION;
 
 console.log("SW FILE LOADED:", VERSION);
@@ -41,7 +41,7 @@ self.addEventListener("fetch", event => {
         .then(response => response.text())
         .then(html => {
 
-          console.log("Injecting header version...");
+          console.log("Injecting Bangalore observer override...");
 
           try {
 
@@ -49,20 +49,25 @@ self.addEventListener("fetch", event => {
               "</body>",
               `
               <script>
-                console.log("SW VERSION INJECTED:", "${VERSION}");
+                console.log("SW BANGALORE MODE ACTIVE:", "${VERSION}");
 
-                (function() {
-                  const el =
-                    document.querySelector('#header') ||
-                    document.querySelector('header') ||
-                    document.querySelector('h1');
+                (function () {
 
-                  if (el) {
-                    el.innerText += " (v${VERSION})";
-                    console.log("✔ Header updated");
-                  } else {
-                    console.log("❌ Header not found");
+                  const BANGALORE = { lat: 12.9716, lon: 77.5946 };
+
+                  // 🔥 Global override your app can read
+                  window.__OBSERVER_OVERRIDE__ = BANGALORE;
+                  window.__USE_BANGALORE__ = true;
+
+                  // 🌙 Phase check (if SunCalc exists)
+                  if (window.SunCalc) {
+                    const now = new Date();
+                    const illum = SunCalc.getMoonIllumination(now);
+                    console.log("🌙 Bangalore moon phase:", illum.phase);
                   }
+
+                  console.log("✔ Bangalore override ready");
+
                 })();
               </script>
 
